@@ -122,3 +122,22 @@ def omniscience_pipeline(file):
 # uploaded_file = st.file_uploader("Upload your CSV file")
 # if uploaded_file is not None:
 #     omniscience_pipeline(uploaded_file)
+import streamlit as st
+
+st.title("Omniscience Sports Model Dashboard")
+
+uploaded_file = st.file_uploader("Upload your CSV file", type="csv")
+if uploaded_file is not None:
+    df = parse_uploaded_file(uploaded_file)
+    if df is not None:
+        st.write("Preview of uploaded data:")
+        st.dataframe(df)
+        with st.spinner("Processing and training your model..."):
+            result = omniscience_pipeline(uploaded_file)
+            if result is None:
+                st.error("Could not process the uploaded file. Please check the format.")
+            else:
+                xgb_model, lgb_model, features = result
+                st.success("Model trained successfully! Ready for predictions.")
+    else:
+        st.error("The uploaded CSV is missing required columns or contains no usable data.")
