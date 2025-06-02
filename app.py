@@ -133,7 +133,7 @@ def upload_stats():
         return jsonify({'error': 'No files provided'}), 400
     files = request.files.getlist('files')
     all_alerts = []
-    results = []
+    result = omniscience_pipeline(df)
     session = db.session
     try:
         for file_storage in files:
@@ -222,3 +222,58 @@ if __name__ == '__main__':
     with app.app_context():
         db.create_all()
     app.run(host='0.0.0.0', port=int(os.environ.get('PORT', 5000)))
+import streamlit as st
+import pandas as pd
+import zipfile
+import io
+
+def is_csv_corrupt(file_obj):
+    try:
+        df = pd.read_csv(file_obj)
+        file_obj.seek(0)  # Reset pointer for future reads
+        return False, df
+    except Exception as e:
+        return True, str(e)
+
+def is_zip_corrupt(file_obj):
+    try:
+        with zipfile.ZipFile(file_obj) as z:
+            # Check for at least one CSV file
+            csv_files = [name for name in z.namelist() if name.endswith('.csv')]
+            if not csv_files:
+                return True, "No CSV files found in ZIP."
+            # Try reading the first CSV inside the ZIP
+            with z.open(csv_files[0]) as f:
+                try:
+                    df = pd.read_csv(f)
+                    return False, df
+                except Exception as e:
+                    return True, f"Corrupt CSV in ZIP: {str(e)}"
+    except zipfile.BadZipFile:
+        return True, "ZIP file is corrupted or invalid."
+    except Exception as e:
+        return True, str(e)
+
+st.title("Omniscience Sports Model Dashboard")
+
+uploaded_file = st.file_uploader("Upload your CSV or ZIP file", type=["csv", "zip"])
+if uploaded_file is not None:
+    file_type = uploaded_file.name.split('.')[-1].lower()
+    if file_type == "csv":
+        corrupt, result = is_csv_corrupt(uploaded_file)
+        if corrupt:
+            st.error(f"CSV file appears to be corrupted or unreadable: {result}")
+        else:
+            st.success("CSV loaded successfully!")
+            st.dataframe(result)
+            # Call your pipeline here with result (the DataFrame)
+    elif file_type == "zip":
+        corrupt, result = is_zip_corrupt(uploaded_file)
+        if corrupt:
+            st.error(f"ZIP file error: {result}")
+        else:
+            st.success("CSV from ZIP loaded successfully!")
+            st.dataframe(result)
+            # Call your pipeline here with result (the DataFrame)
+    else:
+        st.error("Unsupported file type. Please upload a CSV or ZIP file.")
